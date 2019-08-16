@@ -15,7 +15,7 @@ class PostCrawler:
     def __init__(self):
         """constructor of the PostCrawler class"""
         # open text file containing login details
-        f = open('E:/documents/myWorks/python/python source/Data Science/Bincom_Test/login_details.txt', 'r')
+        f = open('login_details.txt', 'r')
         login_details = (line for line in f)
         # unpack details
         self.username, self.password = login_details
