@@ -15,7 +15,7 @@ class PostCrawler:
     def __init__(self):
         """constructor of the PostCrawler class"""
         # open text file containing login details
-        f = open('login_details.txt', 'r')
+        f = open('./login_details.txt', 'r')
         login_details = (line for line in f)
         # unpack details
         self.username, self.password = login_details
@@ -23,11 +23,11 @@ class PostCrawler:
         self.username = self.username[:-1]
 
         # define other useful variables
-        self.posts = self.prev_cook = None
+        self.posts = []
         self.post_container = dict()
 
         # gecko driver path
-        gecko = 'E:/documents/myWorks/python/python source/Data Science/geckodriver.exe'
+        gecko = './geckodriver.exe'
         # firefox profile
         ff_prof = webdriver.FirefoxProfile()
         # block images from loading
@@ -76,20 +76,24 @@ class PostCrawler:
         self.posts = self.driver.find_elements_by_css_selector('div[data-testid="fbfeed_story"]')
         # iterate post
         for post in self.posts:
+            # name
+            n = post.find_element_by_css_selector('div[data-testid="fbfeed_story"] h5').text
+            # paragraph
             try:
-                # name
-                n = post.find_element_by_css_selector('div[data-testid="fbfeed_story"] h5').text
-                # paragraph
-                p = post.find_element_by_css_selector('p') 
-                #print(p.text, '\n\n')
-                # check for repetition of posts
-                if n in self.post_container.keys():
-                    self.post_container[n].add(p.text)
-                else:
+                p = post.find_element_by_css_selector('p')
+            except NoSuchElementException:
+                print('there is no p tag, so i\'m using span')
+                # use span if there is no p tag
+                p = post.find_element_by_css_selector('div > span:nth-child(2) > span:nth-child(1)') 
+            #print(p.text, '\n\n')
+            # check for repetition of posts
+            if n in self.post_container.keys():
+                if p not in self.post_container[n]:
+                    self.post_container[n].append(p.text)
+            else:
+                if p is not '':
                     # store post in a dict
-                    self.post_container[n] = {p.text}
-            except NoSuchElementException as error:
-                print(error)
+                    self.post_container[n] = [p.text]
             
 
     def scroll_page(self):
@@ -147,7 +151,7 @@ class PostCrawler:
         # wait for the page to load
         self.driver.implicitly_wait(90)
         # harvest the post of some users
-        while len(self.post_container) < no_of_users:
+        while len(self.post_container) <= no_of_users:
             try:
                 # grab users posts
                 self.get_posts()
@@ -163,7 +167,7 @@ class PostCrawler:
         time.sleep(2)
         print('Here they are:- \n\n')
         self.commit_post() # save post to db
-        for k,v in self.post_container.values():
+        for k,v in self.post_container.items():
             print(f"""{k}:\n{v}\n\n""")
             
 
@@ -174,4 +178,4 @@ class PostCrawler:
 # test
 if __name__ == "__main__":
     c = PostCrawler()
-    c.run(15)
+    c.run(5)
