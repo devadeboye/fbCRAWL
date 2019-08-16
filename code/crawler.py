@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 import sqlite3
 import json
 from selenium.common.exceptions import NoSuchElementException
+import random
 
 class PostCrawler:
     """fetches friend's posts on facebook"""
@@ -14,7 +15,7 @@ class PostCrawler:
     def __init__(self):
         """constructor of the PostCrawler class"""
         # open text file containing login details
-        f = open('login_details.txt', 'r')
+        f = open('E:/documents/myWorks/python/python source/Data Science/Bincom_Test/login_details.txt', 'r')
         login_details = (line for line in f)
         # unpack details
         self.username, self.password = login_details
@@ -31,23 +32,25 @@ class PostCrawler:
         ff_prof = webdriver.FirefoxProfile()
         # block images from loading
         ff_prof.set_preference('permissions.default.image', 2)
+        # activate incognito mode
+        ff_prof.set_preference('browser.privatebrowsing.autostart', True)
         # block all notifications
         ff_prof.set_preference('dom.webnotifications.enabled', False)
         # instantiate the browser
         self.driver = webdriver.Firefox(firefox_profile=ff_prof, executable_path=gecko)
-        
+
+
     def go_fb(self):
         # go to facebook
         self.driver.get('http://www.facebook.com/login')
         # check if title contains facebook
         assert ('Facebook') in self.driver.title
 
-    def man_cookies(self):
-        """manage everything that has to do with cookies"""
-        # open file containing cookies
-        fr = open('cookies.json', 'r')
-        self.prev_cook = json.load(fr)
-        self.driver.add_cookie(self.prev_cook[0])
+
+    def get_cookies(self):
+        """get cookies for the current session"""
+        return(self.driver.get_cookies())
+
 
     def login(self):
         """log on to facebook"""
@@ -67,8 +70,6 @@ class PostCrawler:
         login_butt.click()
         
 
-        
-
     def get_posts(self):
         """fetches the posts"""
         # list of posts
@@ -79,7 +80,6 @@ class PostCrawler:
                 # name
                 n = post.find_element_by_css_selector('div[data-testid="fbfeed_story"] h5').text
                 # paragraph
-                #p = post.find_element_by_css_selector('div[data-testid="post_message"]')
                 p = post.find_element_by_css_selector('p') 
                 #print(p.text, '\n\n')
                 # check for repetition of posts
@@ -88,41 +88,34 @@ class PostCrawler:
                 else:
                     # store post in a dict
                     self.post_container[n] = {p.text}
-            except NoSuchElementException:
-                print('element not found')
+            except NoSuchElementException as error:
+                print(error)
             
 
     def scroll_page(self):
         """scrolls down the page to load fresh content"""
-        # Get scroll height
-    #    last_height = self.driver.execute_script("return document.body.scrollHeight")
-
-        #while len(self.post_container) < 20:
-    #    SCROLL_PAUSE_TIME = 6
         # Scroll down to bottom
         self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
-        # Wait to load page
-    #    time.sleep(SCROLL_PAUSE_TIME)
-
-        # Calculate new scroll height and compare with last scroll height
-    #    new_height = self.driver.execute_script("return document.body.scrollHeight")
-    #    if new_height == last_height:
-    #        break
-    #    last_height = new_height
-
 
     def commit_post(self):
-        """collect and save posts to db"""
+        """
+        write the crawled result to json and
+        save it to db
+        """
+        # convert to json format before saving in db
+        js_format = json.dumps(self.post_container)
+        
         #create a db
         db = sqlite3.connect('facebook.db')
-
         # get a cursor object
         cur = db.cursor()
-
         # create a table if it doesn't exist
         cur.execute(""" CREATE TABLE IF NOT EXISTS 
-        posts(id INTEGER PRIMARY KEY, name TEXT, post TEXT )""")
+        fb_posts(posts TEXT )""")
+        # add to db
+        cur.execute("""INSERT INTO fb_posts(posts) VALUES
+        (?)""", (js_format,))
         db.commit()
 
 
@@ -146,9 +139,33 @@ class PostCrawler:
         self.driver.quit()
 
 
-    def controller(self):
-        """controls the activity of the crawler"""
-        pass
+    def run(self, no_of_users):
+        """runs and controls the activity of the crawler""" 
+        self.go_fb() # visit facebook
+        time.sleep(5) # wait       
+        self.login() # login
+        # wait for the page to load
+        self.driver.implicitly_wait(90)
+        # harvest the post of some users
+        while len(self.post_container) < no_of_users:
+            try:
+                # grab users posts
+                self.get_posts()
+                # scroll page downward
+                self.scroll_page()
+                # wait... i use randint to vary the wait time
+                time.sleep(random.randint(6,10))    
+            except NoSuchElementException as error:
+                print(error)
+                # scroll page downward
+                self.scroll_page()
+        print(f'successfully gathered the posts of {len(self.post_container)} of your facebook friends.')
+        time.sleep(2)
+        print('Here they are:- \n\n')
+        self.commit_post() # save post to db
+        for k,v in self.post_container.values():
+            print(f"""{k}:\n{v}\n\n""")
+            
 
 
 
@@ -157,3 +174,4 @@ class PostCrawler:
 # test
 if __name__ == "__main__":
     c = PostCrawler()
+    c.run(15)
